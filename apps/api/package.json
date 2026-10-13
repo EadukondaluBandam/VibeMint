@@ -1,0 +1,39 @@
+{
+  "name": "@vibemint/api",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test test/**/*.test.ts",
+    "prisma:generate": "prisma generate",
+    "db:seed": "tsx prisma/seed.ts",
+    "admin:provision": "tsx src/scripts/provision-admin.ts"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.1.2",
+    "@fastify/cors": "^11.3.0",
+    "@fastify/rate-limit": "^11.2.0",
+    "@node-rs/argon2": "^2.2.2",
+    "@prisma/client": "^6.4.1",
+    "@vibemint/config": "workspace:*",
+    "@vibemint/types": "workspace:*",
+    "@vibemint/validation": "workspace:*",
+    "fastify": "^5.2.1",
+    "jsonwebtoken": "^9.0.3"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^22.13.9",
+    "prisma": "^6.4.1",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}

@@ -1,0 +1,417 @@
+// VibeMint Prisma Schema - Authentication, Profile, Interests & Onboarding
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+  BANNED
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum ProfileVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+model User {
+  id                  String         @id @default(uuid())
+  email               String         @unique
+  passwordHash        String         @map("password_hash")
+  status              UserStatus     @default(ACTIVE)
+  role                UserRole       @default(USER)
+  emailVerified       Boolean        @default(false) @map("email_verified")
+  onboardingCompleted Boolean        @default(false) @map("onboarding_completed")
+  createdAt           DateTime       @default(now()) @map("created_at")
+  updatedAt           DateTime       @updatedAt @map("updated_at")
+  lastLoginAt         DateTime?      @map("last_login_at")
+  suspendedAt         DateTime?      @map("suspended_at")
+  suspendedUntil      DateTime?      @map("suspended_until")
+  suspensionReason    String?        @map("suspension_reason")
+  sessions            Session[]
+  profile             Profile?
+  interests           UserInterest[]
+  posts               Post[]
+  likes               PostLike[]
+  savedPosts          SavedPost[]
+  comments            Comment[]
+  following           Follow[]       @relation("FollowingRelation")
+  followers           Follow[]       @relation("FollowersRelation")
+  notificationsReceived  Notification[] @relation("RecipientNotifications")
+  notificationsTriggered Notification[] @relation("ActorNotifications")
+  blocksInitiated        Block[]        @relation("UserBlocked")
+  blocksReceived         Block[]        @relation("UserBlockedBy")
+  reportsSubmitted       Report[]       @relation("UserReportsSubmitted")
+  moderationAuditLogs    ReportAuditLog[] @relation("AdminModerationAuditLogs")
+  moderationActions      ModerationAction[] @relation("AdminModerationActions")
+  mediaAssets            MediaAsset[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String    @id @default(uuid())
+  userId    String    @map("user_id")
+  token     String    @unique
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+  @@map("sessions")
+}
+
+model Profile {
+  id                String            @id @default(uuid())
+  userId            String            @unique @map("user_id")
+  username          String            @unique
+  displayName       String            @map("display_name")
+  bio               String?
+  avatarUrl         String?           @map("avatar_url")
+  coverImageUrl     String?           @map("cover_image_url")
+  dateOfBirth       DateTime?         @map("date_of_birth")
+  gender            String?
+  location          String?
+  profileVisibility ProfileVisibility @default(PUBLIC) @map("profile_visibility")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([username])
+  @@map("profiles")
+}
+
+model Interest {
+  id          String         @id @default(uuid())
+  name        String
+  slug        String         @unique
+  description String?
+  category    String
+  icon        String?
+  isActive    Boolean        @default(true) @map("is_active")
+  sortOrder   Int            @default(0) @map("sort_order")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+  users       UserInterest[]
+
+  @@index([category])
+  @@index([isActive])
+  @@index([sortOrder])
+  @@map("interests")
+}
+
+model UserInterest {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  interestId String   @map("interest_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  interest Interest @relation(fields: [interestId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, interestId])
+  @@index([userId])
+  @@index([interestId])
+  @@map("user_interests")
+}
+
+enum PostStatus {
+  PUBLISHED
+  REMOVED
+}
+
+model Post {
+  id           String      @id @default(uuid())
+  authorId     String      @map("author_id")
+  caption      String?
+  imageUrl     String?     @map("image_url")
+  mediaAssetId String?     @map("media_asset_id")
+  status       PostStatus  @default(PUBLISHED)
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+
+  author     User        @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  mediaAsset MediaAsset? @relation(fields: [mediaAssetId], references: [id], onDelete: SetNull)
+  likes      PostLike[]
+  savedBy    SavedPost[]
+  comments   Comment[]
+
+  @@index([authorId])
+  @@index([status, createdAt])
+  @@index([mediaAssetId])
+  @@map("posts")
+}
+
+model PostLike {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  postId    String   @map("post_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@index([userId])
+  @@index([postId])
+  @@map("post_likes")
+}
+
+model SavedPost {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  postId    String   @map("post_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@index([userId])
+  @@index([postId])
+  @@map("saved_posts")
+}
+
+enum CommentStatus {
+  PUBLISHED
+  REMOVED
+}
+
+model Comment {
+  id        String        @id @default(uuid())
+  postId    String        @map("post_id")
+  authorId  String        @map("author_id")
+  content   String
+  status    CommentStatus @default(PUBLISHED)
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+
+  post   Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([postId, status, createdAt])
+  @@index([authorId])
+  @@map("comments")
+}
+
+enum FollowStatus {
+  ACCEPTED
+  PENDING
+}
+
+model Follow {
+  id          String       @id @default(uuid())
+  followerId  String       @map("follower_id")
+  followingId String       @map("following_id")
+  status      FollowStatus @default(ACCEPTED)
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  follower  User @relation("FollowingRelation", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("FollowersRelation", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followerId, status])
+  @@index([followingId, status])
+  @@map("follows")
+}
+
+enum NotificationType {
+  NEW_FOLLOWER
+  FOLLOW_REQUEST_RECEIVED
+  FOLLOW_REQUEST_ACCEPTED
+  POST_LIKED
+  POST_COMMENTED
+}
+
+model Notification {
+  id           String           @id @default(uuid())
+  recipientId  String           @map("recipient_id")
+  actorId      String?          @map("actor_id")
+  type         NotificationType
+  resourceType String?          @map("resource_type")
+  resourceId   String?          @map("resource_id")
+  isRead       Boolean          @default(false) @map("is_read")
+  readAt       DateTime?        @map("read_at")
+  createdAt    DateTime         @default(now()) @map("created_at")
+
+  recipient User  @relation("RecipientNotifications", fields: [recipientId], references: [id], onDelete: Cascade)
+  actor     User? @relation("ActorNotifications", fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId, createdAt])
+  @@index([recipientId, isRead, createdAt])
+  @@index([recipientId, actorId, type, resourceId])
+  @@map("notifications")
+}
+
+model Block {
+  id            String   @id @default(uuid())
+  blockerId     String   @map("blocker_id")
+  blockedUserId String   @map("blocked_user_id")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  blocker     User @relation("UserBlocked", fields: [blockerId], references: [id], onDelete: Cascade)
+  blockedUser User @relation("UserBlockedBy", fields: [blockedUserId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedUserId])
+  @@index([blockerId, blockedUserId])
+  @@index([blockedUserId, blockerId])
+  @@map("blocks")
+}
+
+enum ReportTargetType {
+  USER
+  POST
+  COMMENT
+}
+
+enum ReportReason {
+  HARASSMENT_OR_BULLYING
+  HATE_OR_ABUSE
+  SEXUAL_CONTENT
+  SPAM_OR_SCAM
+  IMPERSONATION
+  VIOLENCE_OR_THREAT
+  UNDERAGE_OR_SAFETY
+  FRAUD_OR_MISLEADING
+  OTHER
+}
+
+enum ReportStatus {
+  PENDING
+  UNDER_REVIEW
+  RESOLVED
+  DISMISSED
+}
+
+model Report {
+  id          String           @id @default(uuid())
+  reporterId  String           @map("reporter_id")
+  targetType  ReportTargetType @map("target_type")
+  targetId    String           @map("target_id")
+  reason      ReportReason
+  description String?
+  status      ReportStatus     @default(PENDING)
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+  resolvedAt  DateTime?        @map("resolved_at")
+
+  reporter           User               @relation("UserReportsSubmitted", fields: [reporterId], references: [id], onDelete: Cascade)
+  auditLogs          ReportAuditLog[]
+  enforcementActions ModerationAction[] @relation("ReportModerationActions")
+
+  @@index([reporterId, createdAt])
+  @@index([targetType, targetId, status])
+  @@index([status, createdAt])
+  @@index([reporterId, targetType, targetId])
+  @@map("reports")
+}
+
+model ReportAuditLog {
+  id             String       @id @default(uuid())
+  reportId       String       @map("report_id")
+  adminId        String       @map("admin_id")
+  action         String
+  previousStatus ReportStatus @map("previous_status")
+  newStatus      ReportStatus @map("new_status")
+  decisionNote   String?      @map("decision_note")
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  report         Report       @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  admin          User         @relation("AdminModerationAuditLogs", fields: [adminId], references: [id], onDelete: Cascade)
+
+  @@index([reportId, createdAt])
+  @@index([adminId, createdAt])
+  @@map("report_audit_logs")
+}
+
+enum ModerationActionType {
+  REMOVE_POST
+  RESTORE_POST
+  REMOVE_COMMENT
+  RESTORE_COMMENT
+  SUSPEND_USER
+  UNSUSPEND_USER
+}
+
+model ModerationAction {
+  id             String               @id @default(uuid())
+  adminId        String               @map("admin_id")
+  targetType     ReportTargetType     @map("target_type")
+  targetId       String               @map("target_id")
+  actionType     ModerationActionType @map("action_type")
+  reason         String
+  reportId       String?              @map("report_id")
+  suspendedUntil DateTime?            @map("suspended_until")
+  metadata       Json?
+  createdAt      DateTime             @default(now()) @map("created_at")
+
+  admin          User                 @relation("AdminModerationActions", fields: [adminId], references: [id], onDelete: Cascade)
+  report         Report?              @relation("ReportModerationActions", fields: [reportId], references: [id], onDelete: SetNull)
+
+  @@index([targetType, targetId, createdAt])
+  @@index([adminId, createdAt])
+  @@index([reportId])
+  @@map("moderation_actions")
+}
+
+enum MediaStatus {
+  PENDING_UPLOAD
+  PROCESSING
+  READY
+  FAILED
+  DELETED
+}
+
+enum MediaPurpose {
+  AVATAR
+  POST_IMAGE
+}
+
+model MediaAsset {
+  id              String       @id @default(uuid())
+  ownerId         String       @map("owner_id")
+  mediaType       String       @default("IMAGE") @map("media_type")
+  purpose         MediaPurpose
+  storageKey      String       @unique @map("storage_key")
+  storageProvider String       @map("storage_provider")
+  mimeType        String       @map("mime_type")
+  fileSize        Int          @map("file_size")
+  width           Int?
+  height          Int?
+  status          MediaStatus  @default(PENDING_UPLOAD)
+  deliveryUrl     String?      @map("delivery_url")
+  checksum        String?
+  expiresAt       DateTime?    @map("expires_at")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  owner User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  posts Post[]
+
+  @@index([ownerId, createdAt])
+  @@index([status, createdAt])
+  @@index([storageKey])
+  @@map("media_assets")
+}
+
+
+
+
